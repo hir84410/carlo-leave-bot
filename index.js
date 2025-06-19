@@ -11,7 +11,8 @@ const config = {
 const client = new line.Client(config);
 
 app.post('/webhook', line.middleware(config), (req, res) => {
-  Promise.all(req.body.events.map(handleEvent))
+  Promise
+    .all(req.body.events.map(handleEvent))
     .then((result) => res.json(result))
     .catch((err) => {
       console.error(err);
@@ -26,17 +27,12 @@ function handleEvent(event) {
 
   const text = event.message.text;
   const storeNames = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
-  const employeeTypes = ['設計師', '助理', '行政人員'];
-  const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
-
   if (storeNames.includes(text)) {
-    return client.replyMessage(event.replyToken, [getTypeFlex()]);
+    const replyFlex = getEmployeeFlex(text);
+    return client.replyMessage(event.replyToken, [replyFlex]);
   }
 
-  if (employeeTypes.includes(text)) {
-    return client.replyMessage(event.replyToken, [getEmployeeFlex(text)]);
-  }
-
+  const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
   if (leaveTypes.includes(text)) {
     return client.replyMessage(event.replyToken, [{
       type: 'text',
@@ -44,17 +40,12 @@ function handleEvent(event) {
     }]);
   }
 
-  return client.replyMessage(event.replyToken, [getStoreFlex()]);
-}
-
-function getStoreFlex() {
-  const stores = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
-  return {
+  return client.replyMessage(event.replyToken, [{
     type: 'flex',
     altText: '請選擇店家',
     contents: {
       type: 'carousel',
-      contents: stores.map((name) => ({
+      contents: storeNames.map((name) => ({
         type: 'bubble',
         size: 'micro',
         body: {
@@ -78,55 +69,24 @@ function getStoreFlex() {
         }
       }))
     }
-  };
+  }]);
 }
 
-function getTypeFlex() {
-  const types = ['設計師', '助理', '行政人員'];
-  return {
-    type: 'flex',
-    altText: '請選擇職位',
-    contents: {
-      type: 'carousel',
-      contents: types.map((type) => ({
-        type: 'bubble',
-        size: 'micro',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{ type: 'text', text: type, size: 'sm', weight: 'bold' }]
-        },
-        footer: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{
-            type: 'button',
-            style: 'primary',
-            height: 'sm',
-            action: {
-              type: 'message',
-              label: '選擇',
-              text: type
-            }
-          }]
-        }
-      }))
-    }
-  };
-}
-
-function getEmployeeFlex(type) {
+function getEmployeeFlex(store) {
   const employees = {
-    '設計師': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy'],
-    '助理': ['Sandy', 'umi'],
-    '行政人員': ['Masi']
+    '松竹店': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora', 'Sandy', 'umi'],
+    '南興店': ['Elma', 'Bella', 'Abby', '珮茹'],
+    '漢口店': ['麗君', '巧巧', 'cherry', 'Judy', 'Celine', '采妍'],
+    '太平店': ['小麥', 'Erin', '小安', '雯怡', 'yuki'],
+    '高雄店': ['mimi', 'jimmy'],
+    '松安店': ['lina', 'shu']
   };
 
-  const names = employees[type] || [];
+  const names = employees[store] || [];
 
   return {
     type: 'flex',
-    altText: `請選擇${type}`,
+    altText: `請選擇 ${store} 員工`,
     contents: {
       type: 'carousel',
       contents: names.map((name) => ({
