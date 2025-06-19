@@ -1,7 +1,7 @@
 {
   "name": "carlo-leave-bot",
   "version": "1.0.0",
-  "description": "LINE Bot for Carlo Hair leave system",
+  "description": "LINE leave bot for Carlo Hair Salon",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
