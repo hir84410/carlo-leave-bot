@@ -53,8 +53,8 @@ async function handleEvent(event) {
       date: new Date().toISOString().split('T')[0],
     };
 
-    // 傳送到 Google Sheet Webhook
-    await axios.post('https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec', leaveRecord);
+    // ✅ 更新後的 Google Sheet Webhook URL
+    await axios.post('https://script.google.com/macros/s/AKfycbx2EaozKx0ii0LAUNw-Kt-ZFksBnvesqU0iVAtt6PRSMInWrP8ITdGcUKJXOPP4CdZS/exec', leaveRecord);
 
     userState[userId] = null;
     return client.replyMessage(event.replyToken, {
