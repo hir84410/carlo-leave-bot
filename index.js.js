@@ -1,8 +1,7 @@
+
 const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN || '你的_ACCESS_TOKEN',
@@ -11,10 +10,13 @@ const config = {
 
 const app = express();
 app.use(express.json({
-  verify: (req, res, buf) => { req.rawBody = buf; }
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
 }));
 const client = new line.Client(config);
 
+// 暫存用戶狀態
 const userState = {};
 
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -29,36 +31,33 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   }
 });
 
-const storeList = ['松竹店', '南興店', '漢口店', '太平店', '松安店', '高雄店'];
-
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
 
   const userId = event.source.userId;
   const text = event.message.text;
-  const state = userState[userId];
 
   if (text === '我要請假') {
     userState[userId] = { step: 'selectStore' };
     return client.replyMessage(event.replyToken, flexChooseStore);
   }
 
-  if (state?.step === 'selectStore' && storeList.includes(text)) {
-    userState[userId] = { step: 'selectName', store: text };
+  const state = userState[userId];
 
-    const filename = `flexChooseEmployee_${text}.json`;
-    const filepath = path.join(__dirname, filename);
-    const flex = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-
-    return client.replyMessage(event.replyToken, flex);
+  if (state?.step === 'selectStore') {
+    if (flexEmployeeByStore[text]) {
+      userState[userId] = { store: text, step: 'selectEmployee' };
+      return client.replyMessage(event.replyToken, flexEmployeeByStore[text]);
+    } else {
+      return client.replyMessage(event.replyToken, {
+        type: 'text',
+        text: '⚠️ 店家名稱錯誤，請重新選擇。'
+      });
+    }
   }
 
-  if (state?.step === 'selectName') {
-    userState[userId] = {
-      step: 'selectType',
-      store: state.store,
-      name: text
-    };
+  if (state?.step === 'selectEmployee') {
+    userState[userId] = { ...state, name: text, step: 'selectType' };
     return client.replyMessage(event.replyToken, flexChooseLeaveType);
   }
 
@@ -67,36 +66,35 @@ async function handleEvent(event) {
       name: state.name,
       store: state.store,
       type: text,
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
     };
 
     await axios.post('https://script.google.com/macros/s/AKfycbx2EaozKx0ii0LAUNw-Kt-ZFksBnvesqU0iVAtt6PRSMInWrP8ITdGcUKJXOPP4CdZS/exec', leaveRecord);
-
     userState[userId] = null;
     return client.replyMessage(event.replyToken, {
       type: 'text',
-      text: `✅ ${leaveRecord.name} 請假成功（${leaveRecord.store}）：${leaveRecord.type}`
+      text: `✅ ${leaveRecord.store} ➝ ${leaveRecord.name} 請假成功：${leaveRecord.type}`
     });
   }
 
   return client.replyMessage(event.replyToken, {
     type: 'text',
-    text: '請輸入「我要請假」來開始流程 ✅'
+    text: '請輸入「我要請假」來啟動請假流程 ✅'
   });
 }
 
 const flexChooseStore = {
   type: 'flex',
-  altText: '請選擇店別',
+  altText: '請選擇您的店家',
   contents: {
     type: 'carousel',
-    contents: ['松竹店', '南興店', '漢口店', '太平店', '松安店', '高雄店'].map(store => ({
+    contents: ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'].map(store => ({
       type: 'bubble',
       size: 'micro',
       body: {
         type: 'box',
         layout: 'vertical',
-        contents: [{ type: 'text', text: store, size: 'sm', weight: 'bold' }]
+        contents: [{ type: 'text', text: store, weight: 'bold', size: 'sm' }]
       },
       footer: {
         type: 'box',
@@ -104,7 +102,6 @@ const flexChooseStore = {
         contents: [{
           type: 'button',
           style: 'primary',
-          height: 'sm',
           action: { type: 'message', label: '選擇', text: store }
         }]
       }
@@ -123,7 +120,7 @@ const flexChooseLeaveType = {
       body: {
         type: 'box',
         layout: 'vertical',
-        contents: [{ type: 'text', text: type, size: 'sm', weight: 'bold' }]
+        contents: [{ type: 'text', text: type, weight: 'bold', size: 'sm' }]
       },
       footer: {
         type: 'box',
@@ -131,13 +128,50 @@ const flexChooseLeaveType = {
         contents: [{
           type: 'button',
           style: 'primary',
-          height: 'sm',
           action: { type: 'message', label: '選擇', text: type }
         }]
       }
     }))
   }
 };
+
+const employeeMap = {
+  '松竹店': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora', 'Sandy', 'umi'],
+  '南興店': ['Elma', 'Bella', 'Abby', '珮茹'],
+  '漢口店': ['麗君', '巧巧', 'cherry', 'Judy', 'Celine', '采妍'],
+  '太平店': ['小麥', 'Erin', '小安', '雯怡', 'yuki'],
+  '高雄店': ['mimi', 'jimmy'],
+  '松安店': ['lina', 'shu']
+};
+
+const flexEmployeeByStore = {};
+for (const store in employeeMap) {
+  flexEmployeeByStore[store] = {
+    type: 'flex',
+    altText: `請選擇 ${store} 的員工姓名`,
+    contents: {
+      type: 'carousel',
+      contents: employeeMap[store].map(name => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: name, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            action: { type: 'message', label: '選擇', text: name }
+          }]
+        }
+      }))
+    }
+  };
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
