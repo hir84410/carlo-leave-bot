@@ -1,11 +1,10 @@
-
 const express = require('express');
 const line = require('@line/bot-sdk');
 const app = express();
 
 const config = {
-  channelAccessToken: 'lN45j64UfrXt+wfFPfz/1kdaxFG08uRjp9iywWymNjHx1HrCSqsKZNM/4o7f4fUbFB3EtbeyB75vDhmUH7k3un/bV5x5v1Qxpr2xjRUmbYaL0K5U75U4O3+tVu+YBPFp0EduPBHTVelqRqPmtJzMYQdB04t89/1O/w1cDnyilFU=',
-  channelSecret: '604b7180cc7fcffeb543293853a0e11d'
+  channelAccessToken: '你的 Channel Access Token',
+  channelSecret: '你的 Channel Secret'
 };
 
 const client = new line.Client(config);
@@ -20,24 +19,103 @@ app.post('/webhook', line.middleware(config), (req, res) => {
     });
 });
 
+const employees = {
+  '松竹店': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora', 'Sandy', 'umi'],
+  '南興店': ['Elma', 'Bella', 'Abby', '珮茹'],
+  '漢口店': ['麗君', '巧巧', 'cherry', 'Judy', 'Celine', '采妍'],
+  '太平店': ['小麥', 'Erin', '小安', '雯怡', 'yuki'],
+  '高雄店': ['mimi', 'jimmy'],
+  '松安店': ['lina', 'shu']
+};
+
+const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
+
 function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') {
     return Promise.resolve(null);
   }
 
   const text = event.message.text;
-  const storeNames = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
-  const roles = ['設計師', '助理', '行政人員'];
+  const storeNames = Object.keys(employees);
+  const allEmployees = Object.values(employees).flat();
 
   if (storeNames.includes(text)) {
-    return client.replyMessage(event.replyToken, [getRoleFlex(text)]);
+    const roles = ['設計師', '助理', '行政人員'];
+    return client.replyMessage(event.replyToken, [
+      {
+        type: 'flex',
+        altText: `請選擇職位`,
+        contents: {
+          type: 'carousel',
+          contents: roles.map((role) => ({
+            type: 'bubble',
+            size: 'micro',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [{ type: 'text', text: role, size: 'sm', weight: 'bold' }]
+            },
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [{
+                type: 'button',
+                style: 'primary',
+                height: 'sm',
+                action: {
+                  type: 'message',
+                  label: '選擇',
+                  text: role
+                }
+              }]
+            }
+          }))
+        }
+      }
+    ]);
   }
 
-  if (roles.includes(text)) {
-    return client.replyMessage(event.replyToken, [getEmployeeFlex(currentStore, text)]);
+  if (['設計師', '助理', '行政人員'].includes(text)) {
+    const sampleStore = '松竹店'; // you can dynamically assign this if needed
+    const replyFlex = getEmployeeFlex(sampleStore);
+    return client.replyMessage(event.replyToken, [replyFlex]);
   }
 
-  const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
+  if (allEmployees.includes(text)) {
+    return client.replyMessage(event.replyToken, [
+      {
+        type: 'flex',
+        altText: '請選擇請假類別',
+        contents: {
+          type: 'carousel',
+          contents: leaveTypes.map((type) => ({
+            type: 'bubble',
+            size: 'micro',
+            body: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [{ type: 'text', text: type, size: 'sm', weight: 'bold' }]
+            },
+            footer: {
+              type: 'box',
+              layout: 'vertical',
+              contents: [{
+                type: 'button',
+                style: 'primary',
+                height: 'sm',
+                action: {
+                  type: 'message',
+                  label: '選擇',
+                  text: type
+                }
+              }]
+            }
+          }))
+        }
+      }
+    ]);
+  }
+
   if (leaveTypes.includes(text)) {
     return client.replyMessage(event.replyToken, [{
       type: 'text',
@@ -77,80 +155,11 @@ function handleEvent(event) {
   }]);
 }
 
-function getRoleFlex(store) {
-  currentStore = store;
-  const roles = ['設計師', '助理', '行政人員'];
+function getEmployeeFlex(store) {
+  const names = employees[store] || [];
   return {
     type: 'flex',
-    altText: `請選擇${store}職位`,
-    contents: {
-      type: 'carousel',
-      contents: roles.map((role) => ({
-        type: 'bubble',
-        size: 'micro',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{ type: 'text', text: role, size: 'sm', weight: 'bold' }]
-        },
-        footer: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{
-            type: 'button',
-            style: 'primary',
-            height: 'sm',
-            action: {
-              type: 'message',
-              label: '選擇',
-              text: role
-            }
-          }]
-        }
-      }))
-    }
-  };
-}
-
-function getEmployeeFlex(store, role) {
-  const employees = {
-    '松竹店': {
-      '設計師': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora'],
-      '助理': ['Sandy', 'umi'],
-      '行政人員': ['Masi']
-    },
-    '南興店': {
-      '設計師': ['Elma', 'Bella', 'Abby'],
-      '助理': ['珮茹'],
-      '行政人員': ['Josie']
-    },
-    '漢口店': {
-      '設計師': ['麗君', '巧巧', 'cherry', 'Judy'],
-      '助理': ['Celine', '采妍'],
-      '行政人員': ['力嫙', '嫚雅']
-    },
-    '太平店': {
-      '設計師': ['小麥', 'Erin', '小安', '雯怡'],
-      '助理': ['yuki'],
-      '行政人員': ['小君']
-    },
-    '高雄店': {
-      '設計師': ['mimi', 'jimmy'],
-      '助理': [],
-      '行政人員': []
-    },
-    '松安店': {
-      '設計師': ['lina', 'shu'],
-      '助理': [],
-      '行政人員': []
-    }
-  };
-
-  const names = (employees[store] && employees[store][role]) || [];
-
-  return {
-    type: 'flex',
-    altText: `請選擇 ${store} 的 ${role}`,
+    altText: `請選擇 ${store} 員工`,
     contents: {
       type: 'carousel',
       contents: names.map((name) => ({
