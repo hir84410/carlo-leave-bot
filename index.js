@@ -1,6 +1,8 @@
+
 const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
+const bodyParser = require('body-parser');
 
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN || '你的_ACCESS_TOKEN',
@@ -8,24 +10,32 @@ const config = {
 };
 
 const app = express();
-app.use(express.json());
 const client = new line.Client(config);
 
-// 用戶狀態暫存（實務應存資料庫）
-const userState = {};
+// 加入 body-parser 並保留 raw body 給 LINE SDK 使用
+app.post('/webhook', 
+  bodyParser.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    }
+  }),
+  line.middleware(config),
+  async (req, res) => {
+    try {
+      const events = req.body.events;
+      if (!events || events.length === 0) return res.status(200).send('OK');
 
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  try {
-    const events = req.body.events;
-    if (!events || events.length === 0) return res.status(200).send('OK');
-
-    const results = await Promise.all(events.map(handleEvent));
-    res.json(results);
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.status(500).send('Internal Server Error');
+      const results = await Promise.all(events.map(handleEvent));
+      res.json(results);
+    } catch (err) {
+      console.error('Webhook error:', err);
+      res.status(500).send('Internal Server Error');
+    }
   }
-});
+);
+
+// 用戶狀態暫存
+const userState = {};
 
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
@@ -33,7 +43,6 @@ async function handleEvent(event) {
   const userId = event.source.userId;
   const text = event.message.text;
 
-  // 初始觸發：我要請假
   if (text === '我要請假') {
     userState[userId] = { step: 'selectName' };
     return client.replyMessage(event.replyToken, flexChooseName);
@@ -53,7 +62,6 @@ async function handleEvent(event) {
       date: new Date().toISOString().split('T')[0],
     };
 
-    // ✅ 更新後的 Google Sheet Webhook URL
     await axios.post('https://script.google.com/macros/s/AKfycbx2EaozKx0ii0LAUNw-Kt-ZFksBnvesqU0iVAtt6PRSMInWrP8ITdGcUKJXOPP4CdZS/exec', leaveRecord);
 
     userState[userId] = null;
