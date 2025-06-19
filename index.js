@@ -2,6 +2,7 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const axios = require('axios');
 const fs = require('fs');
+const path = require('path');
 
 const config = {
   channelAccessToken: process.env.CHANNEL_ACCESS_TOKEN || '你的_ACCESS_TOKEN',
@@ -9,7 +10,9 @@ const config = {
 };
 
 const app = express();
-app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf } }));
+app.use(express.json({
+  verify: (req, res, buf) => { req.rawBody = buf; }
+}));
 const client = new line.Client(config);
 
 const userState = {};
@@ -26,72 +29,68 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   }
 });
 
+const storeList = ['松竹店', '南興店', '漢口店', '太平店', '松安店', '高雄店'];
+
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return;
+
   const userId = event.source.userId;
   const text = event.message.text;
+  const state = userState[userId];
 
-  // 初始流程
   if (text === '我要請假') {
     userState[userId] = { step: 'selectStore' };
     return client.replyMessage(event.replyToken, flexChooseStore);
   }
 
-  const state = userState[userId];
+  if (state?.step === 'selectStore' && storeList.includes(text)) {
+    userState[userId] = { step: 'selectName', store: text };
 
-  // 選擇店家後
-  if (state?.step === 'selectStore' && storeEmployeeMap[text]) {
-    userState[userId] = { store: text, step: 'selectEmployee' };
+    const filename = `flexChooseEmployee_${text}.json`;
+    const filepath = path.join(__dirname, filename);
+    const flex = JSON.parse(fs.readFileSync(filepath, 'utf8'));
 
-    const flex = JSON.parse(fs.readFileSync(__dirname + '/flexChooseEmployee_' + text + '.json'));
     return client.replyMessage(event.replyToken, flex);
   }
 
-  // 選擇員工
-  if (state?.step === 'selectEmployee') {
-    userState[userId] = { ...state, employee: text, step: 'selectType' };
+  if (state?.step === 'selectName') {
+    userState[userId] = {
+      step: 'selectType',
+      store: state.store,
+      name: text
+    };
     return client.replyMessage(event.replyToken, flexChooseLeaveType);
   }
 
-  // 選擇假別
   if (state?.step === 'selectType') {
-    const record = {
-      name: state.employee,
-      type: text,
+    const leaveRecord = {
+      name: state.name,
       store: state.store,
-      date: new Date().toISOString().split('T')[0],
+      type: text,
+      date: new Date().toISOString().split('T')[0]
     };
 
-    await axios.post('https://script.google.com/macros/s/AKfycbx2EaozKx0ii0LAUNw-Kt-ZFksBnvesqU0iVAtt6PRSMInWrP8ITdGcUKJXOPP4CdZS/exec', record);
+    await axios.post('https://script.google.com/macros/s/AKfycbx2EaozKx0ii0LAUNw-Kt-ZFksBnvesqU0iVAtt6PRSMInWrP8ITdGcUKJXOPP4CdZS/exec', leaveRecord);
 
     userState[userId] = null;
     return client.replyMessage(event.replyToken, {
       type: 'text',
-      text: `✅ ${record.name} 已登記請假：${record.type}`
+      text: `✅ ${leaveRecord.name} 請假成功（${leaveRecord.store}）：${leaveRecord.type}`
     });
   }
 
   return client.replyMessage(event.replyToken, {
     type: 'text',
-    text: '請輸入「我要請假」來啟動流程 ✅'
+    text: '請輸入「我要請假」來開始流程 ✅'
   });
 }
 
-const storeEmployeeMap = {
-  "松竹店": true,
-  "南興店": true,
-  "漢口店": true,
-  "太平店": true,
-  "松安店": true,
-  "高雄店": true
-};
-
 const flexChooseStore = {
   type: 'flex',
-  altText: '請選擇店家',
+  altText: '請選擇店別',
   contents: {
     type: 'carousel',
-    contents: Object.keys(storeEmployeeMap).map(store => ({
+    contents: ['松竹店', '南興店', '漢口店', '太平店', '松安店', '高雄店'].map(store => ({
       type: 'bubble',
       size: 'micro',
       body: {
