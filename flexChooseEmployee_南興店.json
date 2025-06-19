@@ -1,0 +1,137 @@
+{
+  "type": "flex",
+  "altText": "請選擇員工",
+  "contents": {
+    "type": "carousel",
+    "contents": [
+      {
+        "type": "bubble",
+        "size": "micro",
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "text",
+              "text": "Elma",
+              "size": "sm",
+              "weight": "bold"
+            }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "button",
+              "style": "primary",
+              "height": "sm",
+              "action": {
+                "type": "message",
+                "label": "選擇",
+                "text": "Elma"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "bubble",
+        "size": "micro",
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "text",
+              "text": "Bella",
+              "size": "sm",
+              "weight": "bold"
+            }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "button",
+              "style": "primary",
+              "height": "sm",
+              "action": {
+                "type": "message",
+                "label": "選擇",
+                "text": "Bella"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "bubble",
+        "size": "micro",
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "text",
+              "text": "Abby",
+              "size": "sm",
+              "weight": "bold"
+            }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "button",
+              "style": "primary",
+              "height": "sm",
+              "action": {
+                "type": "message",
+                "label": "選擇",
+                "text": "Abby"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "bubble",
+        "size": "micro",
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "text",
+              "text": "珮茹",
+              "size": "sm",
+              "weight": "bold"
+            }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [
+            {
+              "type": "button",
+              "style": "primary",
+              "height": "sm",
+              "action": {
+                "type": "message",
+                "label": "選擇",
+                "text": "珮茹"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
