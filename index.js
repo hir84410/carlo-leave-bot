@@ -1,3 +1,4 @@
+
 const express = require('express');
 const line = require('@line/bot-sdk');
 const dayjs = require('dayjs');
@@ -35,21 +36,29 @@ function handleEvent(event) {
     userState[userId] = {};
   }
 
+  const storeNames = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
+  const roles = ['設計師', '助理', '行政人員'];
+
   if (!userState[userId].store) {
-    const storeNames = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
     if (storeNames.includes(text)) {
       userState[userId].store = text;
-      return client.replyMessage(event.replyToken, [getRoleFlex()]);
+      return client.replyMessage(event.replyToken, getRoleFlex());
+    } else {
+      return client.replyMessage(event.replyToken, [{
+        type: 'text',
+        text: '請選擇店家開始請假流程：松竹店、南興店、漢口店、太平店、高雄店、松安店'
+      }]);
     }
   } else if (!userState[userId].role) {
-    const roles = ['設計師', '助理', '行政人員'];
     if (roles.includes(text)) {
       userState[userId].role = text;
-      return client.replyMessage(event.replyToken, [getEmployeeFlex(userState[userId].store, userState[userId].role)]);
+      return client.replyMessage(event.replyToken, getEmployeeFlex(userState[userId].store, userState[userId].role));
+    } else {
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇正確職位（設計師 / 助理 / 行政人員）' }]);
     }
   } else if (!userState[userId].name) {
     userState[userId].name = text;
-    return client.replyMessage(event.replyToken, [getLeaveTypeFlex()]);
+    return client.replyMessage(event.replyToken, getLeaveTypeFlex());
   } else if (!userState[userId].leaveType) {
     userState[userId].leaveType = text;
     return client.replyMessage(event.replyToken, [{
@@ -65,7 +74,7 @@ function handleEvent(event) {
     const { name, role, store, leaveType, leaveDate } = userState[userId];
     return checkLeaveConflict(name, role, store, leaveDate).then(result => {
       if (result.error) {
-        userState[userId] = {}; // 重置流程
+        userState[userId] = {};
         return client.replyMessage(event.replyToken, [{ type: 'text', text: result.error }]);
       } else {
         return writeLeaveData(name, leaveType, leaveDate).then(() => {
@@ -76,7 +85,7 @@ function handleEvent(event) {
     });
   }
 
-  return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇店家開始請假流程' }]);
+  return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇店家開始請假流程。' }]);
 }
 
 function getRoleFlex() {
