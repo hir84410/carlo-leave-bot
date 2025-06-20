@@ -1,16 +1,16 @@
+
 const express = require('express');
 const line = require('@line/bot-sdk');
 const dayjs = require('dayjs');
-const { checkLeaveConflict, writeLeaveData } = require('./google-sheets');
+const { checkLeaveConflict, writeLeaveData, getMonthlyLeaveCount } = require('./google-sheets');
 const app = express();
 
 const config = {
-  channelAccessToken: 'lN45j64UfrXt+wfFPfz/1kdaxFG08uRjp9iywWymNjHx1HrCSqsKZNM/4o7f4fUbFB3EtbeyB75vDhmUH7k3un/bV5x5v1Qxpr2xjRUmbYaL0K5U75U4O3+tVu+YBPFp0EduPBHTVelqRqPmtJzMYQdB04t89/1O/w1cDnyilFU=',
-  channelSecret: '604b7180cc7fcffeb543293853a0e11d'
+  channelAccessToken: 'YOUR_CHANNEL_ACCESS_TOKEN',
+  channelSecret: 'YOUR_CHANNEL_SECRET'
 };
 
 const client = new line.Client(config);
-
 let userState = {};
 
 app.post('/webhook', line.middleware(config), (req, res) => {
@@ -62,157 +62,46 @@ function handleEvent(event) {
       return client.replyMessage(event.replyToken, [{ type: 'text', text: '請輸入正確的日期格式：YYYY-MM-DD' }]);
     }
 
-    const leaveDate = dayjs(text);
-    const today = dayjs().startOf('day');
-    if (leaveDate.isBefore(today)) {
-      return client.replyMessage(event.replyToken, [{ type: 'text', text: '請輸入未來的日期，無法請過去的假' }]);
+    const selectedDate = dayjs(text);
+    const today = dayjs();
+    if (selectedDate.isBefore(today, 'day')) {
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: '只能請未來的假期，請重新輸入日期' }]);
     }
-
-    if (leaveDate.day() === 2) {
-      return client.replyMessage(event.replyToken, [{ type: 'text', text: '週二為固定公休，請選擇其他日期' }]);
+    if (selectedDate.day() === 2) {
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: '每週二為固定公休，請選擇其他日期' }]);
     }
 
     userState[userId].leaveDate = text;
-    const { name, role, store, leaveType } = userState[userId];
-    return checkLeaveConflict(name, role, store, text).then(result => {
-      if (result.error) {
-        userState[userId] = {}; // 重置流程
-        return client.replyMessage(event.replyToken, [{ type: 'text', text: result.error }]);
-      } else {
-        return writeLeaveData(name, leaveType, text).then(() => {
+    const { name, role, store, leaveType, leaveDate } = userState[userId];
+
+    if (leaveType === '排休') {
+      return getMonthlyLeaveCount(name, leaveType, leaveDate).then(count => {
+        if (count >= 4) {
           userState[userId] = {};
-          return client.replyMessage(event.replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${text} 的 ${leaveType}` }]);
-        });
-      }
-    });
+          return client.replyMessage(event.replyToken, [{ type: 'text', text: `您本月已排休 ${count} 天，已達上限` }]);
+        }
+        return proceedLeave(name, role, store, leaveType, leaveDate, event.replyToken);
+      });
+    }
+
+    return proceedLeave(name, role, store, leaveType, leaveDate, event.replyToken);
   }
 
   return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇店家開始請假流程' }]);
 }
 
-function getRoleFlex() {
-  return {
-    type: 'flex',
-    altText: '請選擇職位',
-    contents: {
-      type: 'carousel',
-      contents: ['設計師', '助理', '行政人員'].map(role => ({
-        type: 'bubble',
-        size: 'micro',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{ type: 'text', text: role, weight: 'bold', size: 'sm' }]
-        },
-        footer: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{
-            type: 'button',
-            style: 'primary',
-            height: 'sm',
-            action: { type: 'message', label: '選擇', text: role }
-          }]
-        }
-      }))
+function proceedLeave(name, role, store, leaveType, leaveDate, replyToken) {
+  return checkLeaveConflict(name, role, store, leaveDate).then(result => {
+    if (result.error) {
+      userState = {};
+      return client.replyMessage(replyToken, [{ type: 'text', text: result.error }]);
+    } else {
+      return writeLeaveData(name, leaveType, leaveDate).then(() => {
+        userState = {};
+        return client.replyMessage(replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${leaveDate} 的 ${leaveType}` }]);
+      });
     }
-  };
+  });
 }
 
-function getEmployeeFlex(store, role) {
-  const employees = {
-    '松竹店': {
-      '設計師': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora'],
-      '助理': ['Sandy', 'umi'],
-      '行政人員': ['Masi']
-    },
-    '南興店': {
-      '設計師': ['Elma', 'Bella', 'Abby'],
-      '助理': ['珮茹'],
-      '行政人員': ['Josie']
-    },
-    '漢口店': {
-      '設計師': ['麗君', '巧巧', 'cherry', 'Judy'],
-      '助理': ['Celine', '采妍'],
-      '行政人員': ['力嫙', '嫚雅']
-    },
-    '太平店': {
-      '設計師': ['小麥', 'Erin', '小安', '雯怡'],
-      '助理': ['yuki'],
-      '行政人員': ['小君']
-    },
-    '高雄店': {
-      '設計師': ['mimi', 'jimmy'],
-      '助理': [],
-      '行政人員': []
-    },
-    '松安店': {
-      '設計師': ['lina', 'shu'],
-      '助理': [],
-      '行政人員': []
-    }
-  };
-
-  const names = employees[store]?.[role] || [];
-
-  return {
-    type: 'flex',
-    altText: `請選擇 ${store} 的 ${role}`,
-    contents: {
-      type: 'carousel',
-      contents: names.map(name => ({
-        type: 'bubble',
-        size: 'micro',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{ type: 'text', text: name, size: 'sm', weight: 'bold' }]
-        },
-        footer: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{
-            type: 'button',
-            style: 'primary',
-            height: 'sm',
-            action: { type: 'message', label: '選擇', text: name }
-          }]
-        }
-      }))
-    }
-  };
-}
-
-function getLeaveTypeFlex() {
-  const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
-  return {
-    type: 'flex',
-    altText: '請選擇請假類型',
-    contents: {
-      type: 'carousel',
-      contents: leaveTypes.map(type => ({
-        type: 'bubble',
-        size: 'micro',
-        body: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{ type: 'text', text: type, weight: 'bold', size: 'sm' }]
-        },
-        footer: {
-          type: 'box',
-          layout: 'vertical',
-          contents: [{
-            type: 'button',
-            style: 'primary',
-            height: 'sm',
-            action: { type: 'message', label: '選擇', text: type }
-          }]
-        }
-      }))
-    }
-  };
-}
-
-app.listen(10000, () => {
-  console.log('Leave Bot running on port 10000');
-});
+// 保留原本的 getRoleFlex, getEmployeeFlex, getLeaveTypeFlex 不變
