@@ -1,4 +1,3 @@
-
 const express = require('express');
 const line = require('@line/bot-sdk');
 const dayjs = require('dayjs');
@@ -36,29 +35,21 @@ function handleEvent(event) {
     userState[userId] = {};
   }
 
-  const storeNames = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
-  const roles = ['設計師', '助理', '行政人員'];
-
   if (!userState[userId].store) {
+    const storeNames = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
     if (storeNames.includes(text)) {
       userState[userId].store = text;
-      return client.replyMessage(event.replyToken, getRoleFlex());
-    } else {
-      return client.replyMessage(event.replyToken, [{
-        type: 'text',
-        text: '請選擇店家開始請假流程：松竹店、南興店、漢口店、太平店、高雄店、松安店'
-      }]);
+      return client.replyMessage(event.replyToken, [getRoleFlex()]);
     }
   } else if (!userState[userId].role) {
+    const roles = ['設計師', '助理', '行政人員'];
     if (roles.includes(text)) {
       userState[userId].role = text;
-      return client.replyMessage(event.replyToken, getEmployeeFlex(userState[userId].store, userState[userId].role));
-    } else {
-      return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇正確職位（設計師 / 助理 / 行政人員）' }]);
+      return client.replyMessage(event.replyToken, [getEmployeeFlex(userState[userId].store, userState[userId].role)]);
     }
   } else if (!userState[userId].name) {
     userState[userId].name = text;
-    return client.replyMessage(event.replyToken, getLeaveTypeFlex());
+    return client.replyMessage(event.replyToken, [getLeaveTypeFlex()]);
   } else if (!userState[userId].leaveType) {
     userState[userId].leaveType = text;
     return client.replyMessage(event.replyToken, [{
@@ -70,22 +61,33 @@ function handleEvent(event) {
     if (!dateRegex.test(text)) {
       return client.replyMessage(event.replyToken, [{ type: 'text', text: '請輸入正確的日期格式：YYYY-MM-DD' }]);
     }
+
+    const leaveDate = dayjs(text);
+    const today = dayjs().startOf('day');
+    if (leaveDate.isBefore(today)) {
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: '請輸入未來的日期，無法請過去的假' }]);
+    }
+
+    if (leaveDate.day() === 2) {
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: '週二為固定公休，請選擇其他日期' }]);
+    }
+
     userState[userId].leaveDate = text;
-    const { name, role, store, leaveType, leaveDate } = userState[userId];
-    return checkLeaveConflict(name, role, store, leaveDate).then(result => {
+    const { name, role, store, leaveType } = userState[userId];
+    return checkLeaveConflict(name, role, store, text).then(result => {
       if (result.error) {
-        userState[userId] = {};
+        userState[userId] = {}; // 重置流程
         return client.replyMessage(event.replyToken, [{ type: 'text', text: result.error }]);
       } else {
-        return writeLeaveData(name, leaveType, leaveDate).then(() => {
+        return writeLeaveData(name, leaveType, text).then(() => {
           userState[userId] = {};
-          return client.replyMessage(event.replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${leaveDate} 的 ${leaveType}` }]);
+          return client.replyMessage(event.replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${text} 的 ${leaveType}` }]);
         });
       }
     });
   }
 
-  return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇店家開始請假流程。' }]);
+  return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇店家開始請假流程' }]);
 }
 
 function getRoleFlex() {
