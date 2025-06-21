@@ -18,3 +18,8 @@ let userState = {};
 // Force deploy: 2025-06-21 16:04:45
 
 // Force deploy: 2025-06-21 16:27:53
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`Leave Bot running on port ${PORT}`);
+});
