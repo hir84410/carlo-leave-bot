@@ -1,25 +1,28 @@
-const express = require('express');
-const line = require('@line/bot-sdk');
-const dayjs = require('dayjs');
-const { checkLeaveConflict, writeLeaveData } = require('./google-sheets');
-const app = express();
 
-const config = {
-  channelAccessToken: 'lN45j64UfrXt+wfFPfz/1kdaxFG08uRjp9iywWymNjHx1HrCSqsKZNM/4o7f4fUbFB3EtbeyB75vDhmUH7k3un/bV5x5v1Qxpr2xjRUmbYaL0K5U75U4O3+tVu+YBPFp0EduPBHTVelqRqPmtJzMYQdB04t89/1O/w1cDnyilFU=',
-  channelSecret: '604b7180cc7fcffeb543293853a0e11d'
-};
-
-const client = new line.Client(config);
-
-let userState = {};
-
-// ...中略，請參見完整對話輸入內容...
-
-// Force deploy: 2025-06-21 16:04:45
-
-// Force deploy: 2025-06-21 16:27:53
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Leave Bot running on port ${PORT}`);
+// 修正：加入狀態檢查，避免跳過請假流程步驟
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  Promise.all(req.body.events.map(handleEvent))
+    .then((result) => res.json(result));
 });
+
+async function handleEvent(event) {
+  const userId = event.source.userId;
+  if (!userState[userId]) {
+    userState[userId] = {};
+  }
+
+  const state = userState[userId];
+  const text = event.message?.text;
+
+  // 判斷是否已選擇請假天數，若未選擇則引導重新開始
+  if (!state.store || !state.role || !state.name || !state.leaveType || !state.leaveDays) {
+    await client.replyMessage(event.replyToken, {
+      type: 'text',
+      text: '流程錯誤，請重新選擇店家開始請假流程。'
+    });
+    userState[userId] = {}; // 重置流程狀態
+    return;
+  }
+
+  // 進入日期處理流程...
+}
