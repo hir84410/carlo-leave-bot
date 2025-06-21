@@ -1,4 +1,3 @@
-
 const express = require('express');
 const line = require('@line/bot-sdk');
 const dayjs = require('dayjs');
@@ -25,6 +24,26 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 });
 
 function handleEvent(event) {
+  // 處理日期選擇 postback
+  if (event.type === 'postback' && event.postback?.data === 'select-date') {
+    const userId = event.source.userId;
+    const selectedDate = event.postback.params.date;
+    if (!userState[userId]) userState[userId] = {};
+    userState[userId].leaveDate = selectedDate;
+    const { name, role, store, leaveType, leaveDate } = userState[userId];
+    return checkLeaveConflict(name, role, store, leaveDate).then(result => {
+      if (result.error) {
+        userState[userId] = {}; // 重置流程
+        return client.replyMessage(event.replyToken, [{ type: 'text', text: result.error }]);
+      } else {
+        return writeLeaveData(name, leaveType, leaveDate).then(() => {
+          userState[userId] = {};
+          return client.replyMessage(event.replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${leaveDate} 的 ${leaveType}` }]);
+        });
+      }
+    });
+  }
+
   
 if (event.type === 'postback' && event.postback.data === 'startDate') {
   const userId = event.source.userId;
@@ -402,3 +421,43 @@ function getDatePickerFlex() {
 
 
 // ✅ 支援 datetimepicker 日期選擇 + 多日請假計算邏輯
+
+
+function getDatePickerFlex() {
+  const today = dayjs().format('YYYY-MM-DD');
+  return {
+    type: 'flex',
+    altText: '請選擇請假開始日期',
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: '請選擇請假開始日期',
+            weight: 'bold',
+            size: 'md'
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            action: {
+              type: 'datetimepicker',
+              label: '選擇日期',
+              data: 'select-date',
+              mode: 'date',
+              initial: today,
+              min: today,
+              max: dayjs().add(6, 'month').format('YYYY-MM-DD')
+            }
+          }
+        ]
+      }
+    }
+  };
+}
+
