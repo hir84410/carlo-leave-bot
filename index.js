@@ -269,6 +269,7 @@ function getEmployeeList(store, role) {
   return data[store]?.[role] || [];
 }
 
-app.listen(10000, () => {
-  console.log('Leave Bot running on port 10000');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Leave Bot running on port ${PORT}`);
 });
