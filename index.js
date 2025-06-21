@@ -1,3 +1,4 @@
+
 const express = require('express');
 const line = require('@line/bot-sdk');
 const dayjs = require('dayjs');
@@ -40,22 +41,48 @@ function handleEvent(event) {
     if (storeNames.includes(text)) {
       userState[userId].store = text;
       return client.replyMessage(event.replyToken, [getRoleFlex()]);
+    } else {
+      return client.replyMessage(event.replyToken, [
+        { type: 'text', text: '請從選單中點選店名，不要手動輸入哦～' },
+        getStoreFlex()
+      ]);
     }
   } else if (!userState[userId].role) {
     const roles = ['設計師', '助理', '行政人員'];
     if (roles.includes(text)) {
       userState[userId].role = text;
       return client.replyMessage(event.replyToken, [getEmployeeFlex(userState[userId].store, userState[userId].role)]);
+    } else {
+      return client.replyMessage(event.replyToken, [
+        { type: 'text', text: '請從選單中點選職位～' },
+        getRoleFlex()
+      ]);
     }
   } else if (!userState[userId].name) {
-    userState[userId].name = text;
-    return client.replyMessage(event.replyToken, [getLeaveTypeFlex()]);
+    const validNames = getEmployeeList(userState[userId].store, userState[userId].role);
+    if (validNames.includes(text)) {
+      userState[userId].name = text;
+      return client.replyMessage(event.replyToken, [getLeaveTypeFlex()]);
+    } else {
+      return client.replyMessage(event.replyToken, [
+        { type: 'text', text: '請從選單中選擇您的名字喔～' },
+        getEmployeeFlex(userState[userId].store, userState[userId].role)
+      ]);
+    }
   } else if (!userState[userId].leaveType) {
-    userState[userId].leaveType = text;
-    return client.replyMessage(event.replyToken, [{
-      type: 'text',
-      text: `請輸入請假日期（YYYY-MM-DD）`
-    }]);
+    const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
+    if (leaveTypes.includes(text)) {
+      userState[userId].leaveType = text;
+      return client.replyMessage(event.replyToken, [{
+        type: 'text',
+        text: `請輸入請假日期（YYYY-MM-DD）`
+      }]);
+    } else {
+      return client.replyMessage(event.replyToken, [
+        { type: 'text', text: '請從選單中選擇請假類型喔～' },
+        getLeaveTypeFlex()
+      ]);
+    }
   } else if (!userState[userId].leaveDate) {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(text)) {
@@ -76,7 +103,40 @@ function handleEvent(event) {
     });
   }
 
-  return client.replyMessage(event.replyToken, [{ type: 'text', text: '請選擇店家開始請假流程' }]);
+  return client.replyMessage(event.replyToken, [
+    { type: 'text', text: '請從選單中選擇店家以開始請假流程' },
+    getStoreFlex()
+  ]);
+}
+
+function getStoreFlex() {
+  const stores = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
+  return {
+    type: 'flex',
+    altText: '請選擇店家',
+    contents: {
+      type: 'carousel',
+      contents: stores.map(store => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: store, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: '選擇', text: store }
+          }]
+        }
+      }))
+    }
+  };
 }
 
 function getRoleFlex() {
@@ -109,41 +169,8 @@ function getRoleFlex() {
 }
 
 function getEmployeeFlex(store, role) {
-  const employees = {
-    '松竹店': {
-      '設計師': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora'],
-      '助理': ['Sandy', 'umi'],
-      '行政人員': ['Masi']
-    },
-    '南興店': {
-      '設計師': ['Elma', 'Bella', 'Abby'],
-      '助理': ['珮茹'],
-      '行政人員': ['Josie']
-    },
-    '漢口店': {
-      '設計師': ['麗君', '巧巧', 'cherry', 'Judy'],
-      '助理': ['Celine', '采妍'],
-      '行政人員': ['力嫙', '嫚雅']
-    },
-    '太平店': {
-      '設計師': ['小麥', 'Erin', '小安', '雯怡'],
-      '助理': ['yuki'],
-      '行政人員': ['小君']
-    },
-    '高雄店': {
-      '設計師': ['mimi', 'jimmy'],
-      '助理': [],
-      '行政人員': []
-    },
-    '松安店': {
-      '設計師': ['lina', 'shu'],
-      '助理': [],
-      '行政人員': []
-    }
-  };
-
+  const employees = getEmployeeListByStore();
   const names = employees[store]?.[role] || [];
-
   return {
     type: 'flex',
     altText: `請選擇 ${store} 的 ${role}`,
@@ -200,6 +227,46 @@ function getLeaveTypeFlex() {
       }))
     }
   };
+}
+
+function getEmployeeListByStore() {
+  return {
+    '松竹店': {
+      '設計師': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora'],
+      '助理': ['Sandy', 'umi'],
+      '行政人員': ['Masi']
+    },
+    '南興店': {
+      '設計師': ['Elma', 'Bella', 'Abby'],
+      '助理': ['珮茹'],
+      '行政人員': ['Josie']
+    },
+    '漢口店': {
+      '設計師': ['麗君', '巧巧', 'cherry', 'Judy'],
+      '助理': ['Celine', '采妍'],
+      '行政人員': ['力嫙', '嫚雅']
+    },
+    '太平店': {
+      '設計師': ['小麥', 'Erin', '小安', '雯怡'],
+      '助理': ['yuki'],
+      '行政人員': ['小君']
+    },
+    '高雄店': {
+      '設計師': ['mimi', 'jimmy'],
+      '助理': [],
+      '行政人員': []
+    },
+    '松安店': {
+      '設計師': ['lina', 'shu'],
+      '助理': [],
+      '行政人員': []
+    }
+  };
+}
+
+function getEmployeeList(store, role) {
+  const data = getEmployeeListByStore();
+  return data[store]?.[role] || [];
 }
 
 app.listen(10000, () => {
