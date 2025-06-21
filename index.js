@@ -1,10 +1,3 @@
-
-// Carlo Leave Bot - 修正版本（已整合 Render 支援 + datetimepicker 請假日選擇 + 多日請假）
-// 更新說明：
-// 1. ✅ 移除重複定義的 getDatePickerFlex()
-// 2. ✅ 保留支援 postback.data === 'startDate' 的日期選擇邏輯
-// 3. ✅ 保持 process.env.PORT 以支援 Render 自動分配 port
-
 const express = require('express');
 const line = require('@line/bot-sdk');
 const dayjs = require('dayjs');
@@ -31,38 +24,59 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 });
 
 function handleEvent(event) {
-  // ✅ 處理日期 postback：datetimepicker 傳回 startDate
-  if (event.type === 'postback' && event.postback?.data === 'startDate') {
+  // 處理日期選擇 postback
+  if (event.type === 'postback' && event.postback?.data === 'select-date') {
     const userId = event.source.userId;
-    const startDate = event.postback.params.date;
-    const { name, role, store, leaveType, leaveDays } = userState[userId];
-    const leaveDates = [];
-
-    for (let i = 0; i < Number(leaveDays); i++) {
-      const date = dayjs(startDate).add(i, 'day').format('YYYY-MM-DD');
-      leaveDates.push(date);
-    }
-
-    const checkAll = leaveDates.map(date =>
-      checkLeaveConflict(name, role, store, date).then(res => ({ date, error: res.error }))
-    );
-
-    return Promise.all(checkAll).then(results => {
-      const conflict = results.find(r => r.error);
-      if (conflict) {
-        userState[userId] = {};
-        return client.replyMessage(event.replyToken, [{ type: 'text', text: `${conflict.date} ${conflict.error}` }]);
+    const selectedDate = event.postback.params.date;
+    if (!userState[userId]) userState[userId] = {};
+    userState[userId].leaveDate = selectedDate;
+    const { name, role, store, leaveType, leaveDate } = userState[userId];
+    return checkLeaveConflict(name, role, store, leaveDate).then(result => {
+      if (result.error) {
+        userState[userId] = {}; // 重置流程
+        return client.replyMessage(event.replyToken, [{ type: 'text', text: result.error }]);
       } else {
-        const writeAll = leaveDates.map(date => writeLeaveData(name, leaveType, date));
-        return Promise.all(writeAll).then(() => {
+        return writeLeaveData(name, leaveType, leaveDate).then(() => {
           userState[userId] = {};
-          return client.replyMessage(event.replyToken, [
-            { type: 'text', text: `已成功為 ${name} 記錄 ${leaveDates.join(', ')} 的 ${leaveType}` }
-          ]);
+          return client.replyMessage(event.replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${leaveDate} 的 ${leaveType}` }]);
         });
       }
     });
   }
+
+  
+if (event.type === 'postback' && event.postback.data === 'startDate') {
+  const userId = event.source.userId;
+  const startDate = event.postback.params.date;
+  const { name, role, store, leaveType, leaveDays } = userState[userId];
+  const leaveDates = [];
+
+  for (let i = 0; i < Number(leaveDays); i++) {
+    const date = dayjs(startDate).add(i, 'day').format('YYYY-MM-DD');
+    leaveDates.push(date);
+  }
+
+  const checkAll = leaveDates.map(date =>
+    checkLeaveConflict(name, role, store, date).then(res => ({ date, error: res.error }))
+  );
+
+  return Promise.all(checkAll).then(results => {
+    const conflict = results.find(r => r.error);
+    if (conflict) {
+      userState[userId] = {};
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: `${conflict.date} ${conflict.error}` }]);
+    } else {
+      const writeAll = leaveDates.map(date => writeLeaveData(name, leaveType, date));
+      return Promise.all(writeAll).then(() => {
+        userState[userId] = {};
+        return client.replyMessage(event.replyToken, [
+          { type: 'text', text: `已成功為 ${name} 記錄 ${leaveDates.join(', ')} 的 ${leaveType}` }
+        ]);
+      });
+    }
+  });
+}
+
 
   if (event.type !== 'message' || event.message.type !== 'text') {
     return Promise.resolve(null);
@@ -119,17 +133,40 @@ function handleEvent(event) {
         getLeaveTypeFlex()
       ]);
     }
+  
   } else if (!userState[userId].leaveDays) {
-    const days = ['1', '2', '3', '4', '5', '6', '7'];
+    const days = ['1','2','3','4','5','6','7'];
     if (days.includes(text)) {
       userState[userId].leaveDays = text;
-      return client.replyMessage(event.replyToken, [getDatePickerFlex()]);
+      return client.replyMessage(event.replyToken, [{
+        type: 'text',
+        text: `請選擇請假開始日期（上下滑動選單）`
+      }]);
     } else {
       return client.replyMessage(event.replyToken, [
         { type: 'text', text: '請從選單中選擇請假天數（1～7 天）' },
         getLeaveDaysFlex()
       ]);
     }
+
+  } else if (!userState[userId].leaveDate) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(text)) {
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: '請輸入正確的日期格式：YYYY-MM-DD' }]);
+    }
+    userState[userId].leaveDate = text;
+    const { name, role, store, leaveType, leaveDate } = userState[userId];
+    return checkLeaveConflict(name, role, store, leaveDate).then(result => {
+      if (result.error) {
+        userState[userId] = {}; // 重置流程
+        return client.replyMessage(event.replyToken, [{ type: 'text', text: result.error }]);
+      } else {
+        return writeLeaveData(name, leaveType, leaveDate).then(() => {
+          userState[userId] = {};
+          return client.replyMessage(event.replyToken, [{ type: 'text', text: `已成功為 ${name} 記錄 ${leaveDate} 的 ${leaveType}` }]);
+        });
+      }
+    });
   }
 
   return client.replyMessage(event.replyToken, [
@@ -138,7 +175,209 @@ function handleEvent(event) {
   ]);
 }
 
-// ✅ 正確版 datetimepicker Flex（只保留這一個）
+function getStoreFlex() {
+  const stores = ['松竹店', '南興店', '漢口店', '太平店', '高雄店', '松安店'];
+  return {
+    type: 'flex',
+    altText: '請選擇店家',
+    contents: {
+      type: 'carousel',
+      contents: stores.map(store => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: store, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: '選擇', text: store }
+          }]
+        }
+      }))
+    }
+  };
+}
+
+function getRoleFlex() {
+  return {
+    type: 'flex',
+    altText: '請選擇職位',
+    contents: {
+      type: 'carousel',
+      contents: ['設計師', '助理', '行政人員'].map(role => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: role, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: '選擇', text: role }
+          }]
+        }
+      }))
+    }
+  };
+}
+
+function getEmployeeFlex(store, role) {
+  const employees = getEmployeeListByStore();
+  const names = employees[store]?.[role] || [];
+  return {
+    type: 'flex',
+    altText: `請選擇 ${store} 的 ${role}`,
+    contents: {
+      type: 'carousel',
+      contents: names.map(name => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: name, size: 'sm', weight: 'bold' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: '選擇', text: name }
+          }]
+        }
+      }))
+    }
+  };
+}
+
+function getLeaveTypeFlex() {
+  const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
+  return {
+    type: 'flex',
+    altText: '請選擇請假類型',
+    contents: {
+      type: 'carousel',
+      contents: leaveTypes.map(type => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: type, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: '選擇', text: type }
+          }]
+        }
+      }))
+    }
+  };
+}
+
+function getEmployeeListByStore() {
+  return {
+    '松竹店': {
+      '設計師': ['琴', '菲菲', 'Johnny', 'keke', 'Wendy', 'tom', 'Dora'],
+      '助理': ['Sandy', 'umi'],
+      '行政人員': ['Masi']
+    },
+    '南興店': {
+      '設計師': ['Elma', 'Bella', 'Abby'],
+      '助理': ['珮茹'],
+      '行政人員': ['Josie']
+    },
+    '漢口店': {
+      '設計師': ['麗君', '巧巧', 'cherry', 'Judy'],
+      '助理': ['Celine', '采妍'],
+      '行政人員': ['力嫙', '嫚雅']
+    },
+    '太平店': {
+      '設計師': ['小麥', 'Erin', '小安', '雯怡'],
+      '助理': ['yuki'],
+      '行政人員': ['小君']
+    },
+    '高雄店': {
+      '設計師': ['mimi', 'jimmy'],
+      '助理': [],
+      '行政人員': []
+    },
+    '松安店': {
+      '設計師': ['lina', 'shu'],
+      '助理': [],
+      '行政人員': []
+    }
+  };
+}
+
+function getEmployeeList(store, role) {
+  const data = getEmployeeListByStore();
+  return data[store]?.[role] || [];
+}
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Leave Bot running on port ${PORT}`);
+});
+
+// Render-compatible version with process.env.PORT
+
+
+
+function getLeaveDaysFlex() {
+  const days = [1, 2, 3, 4, 5, 6, 7];
+  return {
+    type: 'flex',
+    altText: '請選擇請假天數',
+    contents: {
+      type: 'carousel',
+      contents: days.map(day => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: `${day} 天`, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: `${day} 天`, text: `${day}` }
+          }]
+        }
+      }))
+    }
+  };
+}
+
+
+// Render-compatible version with process.env.PORT and leave days selection
+
+
 function getDatePickerFlex() {
   const today = dayjs().format('YYYY-MM-DD');
   const max = dayjs().add(6, 'month').format('YYYY-MM-DD');
@@ -180,7 +419,47 @@ function getDatePickerFlex() {
   };
 }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Leave Bot running on port ${PORT}`);
-});
+
+// ✅ 支援 datetimepicker 日期選擇 + 多日請假計算邏輯
+
+
+function getDatePickerFlex() {
+  const today = dayjs().format('YYYY-MM-DD');
+  return {
+    type: 'flex',
+    altText: '請選擇請假開始日期',
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        contents: [
+          {
+            type: 'text',
+            text: '請選擇請假開始日期',
+            weight: 'bold',
+            size: 'md'
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            action: {
+              type: 'datetimepicker',
+              label: '選擇日期',
+              data: 'select-date',
+              mode: 'date',
+              initial: today,
+              min: today,
+              max: dayjs().add(6, 'month').format('YYYY-MM-DD')
+            }
+          }
+        ]
+      }
+    }
+  };
+}
+
+
+// Force deploy: 2025-06-21 16:04:45
