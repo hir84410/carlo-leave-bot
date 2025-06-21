@@ -273,3 +273,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Leave Bot running on port ${PORT}`);
 });
+
+// Render-compatible version with process.env.PORT
