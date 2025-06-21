@@ -73,16 +73,29 @@ function handleEvent(event) {
     const leaveTypes = ['排休', '病假', '特休', '事假', '喪假', '產假'];
     if (leaveTypes.includes(text)) {
       userState[userId].leaveType = text;
-      return client.replyMessage(event.replyToken, [{
-        type: 'text',
-        text: `請輸入請假日期（YYYY-MM-DD）`
-      }]);
+      return client.replyMessage(event.replyToken, [getLeaveDaysFlex()]);
     } else {
       return client.replyMessage(event.replyToken, [
         { type: 'text', text: '請從選單中選擇請假類型喔～' },
         getLeaveTypeFlex()
       ]);
     }
+  
+  } else if (!userState[userId].leaveDays) {
+    const days = ['1','2','3','4','5','6','7'];
+    if (days.includes(text)) {
+      userState[userId].leaveDays = text;
+      return client.replyMessage(event.replyToken, [{
+        type: 'text',
+        text: `請輸入請假開始日期（YYYY-MM-DD）`
+      }]);
+    } else {
+      return client.replyMessage(event.replyToken, [
+        { type: 'text', text: '請從選單中選擇請假天數（1～7 天）' },
+        getLeaveDaysFlex()
+      ]);
+    }
+
   } else if (!userState[userId].leaveDate) {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dateRegex.test(text)) {
@@ -275,3 +288,38 @@ app.listen(PORT, () => {
 });
 
 // Render-compatible version with process.env.PORT
+
+
+
+function getLeaveDaysFlex() {
+  const days = [1, 2, 3, 4, 5, 6, 7];
+  return {
+    type: 'flex',
+    altText: '請選擇請假天數',
+    contents: {
+      type: 'carousel',
+      contents: days.map(day => ({
+        type: 'bubble',
+        size: 'micro',
+        body: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{ type: 'text', text: `${day} 天`, weight: 'bold', size: 'sm' }]
+        },
+        footer: {
+          type: 'box',
+          layout: 'vertical',
+          contents: [{
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: { type: 'message', label: `${day} 天`, text: `${day}` }
+          }]
+        }
+      }))
+    }
+  };
+}
+
+
+// Render-compatible version with process.env.PORT and leave days selection
