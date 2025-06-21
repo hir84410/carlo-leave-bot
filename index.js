@@ -25,6 +25,40 @@ app.post('/webhook', line.middleware(config), (req, res) => {
 });
 
 function handleEvent(event) {
+  
+if (event.type === 'postback' && event.postback.data === 'startDate') {
+  const userId = event.source.userId;
+  const startDate = event.postback.params.date;
+  const { name, role, store, leaveType, leaveDays } = userState[userId];
+  const leaveDates = [];
+
+  for (let i = 0; i < Number(leaveDays); i++) {
+    const date = dayjs(startDate).add(i, 'day').format('YYYY-MM-DD');
+    leaveDates.push(date);
+  }
+
+  const checkAll = leaveDates.map(date =>
+    checkLeaveConflict(name, role, store, date).then(res => ({ date, error: res.error }))
+  );
+
+  return Promise.all(checkAll).then(results => {
+    const conflict = results.find(r => r.error);
+    if (conflict) {
+      userState[userId] = {};
+      return client.replyMessage(event.replyToken, [{ type: 'text', text: `${conflict.date} ${conflict.error}` }]);
+    } else {
+      const writeAll = leaveDates.map(date => writeLeaveData(name, leaveType, date));
+      return Promise.all(writeAll).then(() => {
+        userState[userId] = {};
+        return client.replyMessage(event.replyToken, [
+          { type: 'text', text: `已成功為 ${name} 記錄 ${leaveDates.join(', ')} 的 ${leaveType}` }
+        ]);
+      });
+    }
+  });
+}
+
+
   if (event.type !== 'message' || event.message.type !== 'text') {
     return Promise.resolve(null);
   }
@@ -87,7 +121,7 @@ function handleEvent(event) {
       userState[userId].leaveDays = text;
       return client.replyMessage(event.replyToken, [{
         type: 'text',
-        text: `請輸入請假開始日期（YYYY-MM-DD）`
+        text: `請選擇請假開始日期（上下滑動選單）`
       }]);
     } else {
       return client.replyMessage(event.replyToken, [
@@ -323,3 +357,48 @@ function getLeaveDaysFlex() {
 
 
 // Render-compatible version with process.env.PORT and leave days selection
+
+
+function getDatePickerFlex() {
+  const today = dayjs().format('YYYY-MM-DD');
+  const max = dayjs().add(6, 'month').format('YYYY-MM-DD');
+  return {
+    type: 'flex',
+    altText: '請選擇請假開始日期',
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: '請選擇請假開始日期',
+            weight: 'bold',
+            size: 'md',
+            margin: 'none'
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'datetimepicker',
+              label: '選擇日期',
+              data: 'startDate',
+              mode: 'date',
+              initial: today,
+              min: today,
+              max: max
+            },
+            style: 'primary',
+            height: 'sm',
+            margin: 'md'
+          }
+        ]
+      }
+    }
+  };
+}
+
+
+// ✅ 支援 datetimepicker 日期選擇 + 多日請假計算邏輯
